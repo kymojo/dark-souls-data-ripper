@@ -11,6 +11,7 @@ namespace DarkSoulsRipper.Ripper
     class SoulsDatabase
     {
         private SqliteConnection db;
+        private int maxInsertBatch = 500;
 
         public SoulsDatabase(String databasePath) {
             db = CreateDatabase(databasePath);
@@ -33,7 +34,7 @@ namespace DarkSoulsRipper.Ripper
         public void Close() {
             db.Close();
         }
-        private void ExecuteQuery(SqliteConnection db, String query) {
+        private void ExecuteQuery(String query) {
             SqliteCommand createTable = new SqliteCommand(query, db);
             createTable.ExecuteNonQuery();
         }
@@ -43,30 +44,49 @@ namespace DarkSoulsRipper.Ripper
             results.
         }*/
 
-        public void WriteDataTable(SqliteConnection db, SoulsDataTable table) {
-            CreateTable(db, table);
+        public void WriteDataTable(SoulsDataTable table) {
+            CreateTable(table);
+            /*DEBUG*/ Console.WriteLine($"Created table '{table.GetName()}'");
             List<String> insertStrings = new List<String>();
             foreach(Dictionary<String,object> row in table.GetRows()) {
                 List<String> values = new List<String>();
                 foreach (SoulsDataTable.Column column in table.GetColumns()) {
-                    String valueString = row[column.GetName()].ToString();
-                    if (column.GetColumnType() == SoulsDataTable.Column.ColumnType.TEXT)
-                        valueString = $"'{valueString}'";
+                    object value;
+                    row.TryGetValue(column.GetName(), out value);
+                    String valueString = (value != null ? value.ToString() : "NULL");
+                    if (column.GetColumnType() == SoulsDataTable.Column.ColumnType.TEXT && value != null)
+                        valueString = $"'{valueString.Replace("'","''")}'";
                     values.Add(valueString);
                 }
                 String insertString = String.Join(", ", values);
                 insertString = $"({insertString})";
                 insertStrings.Add(insertString);
             }
-            // TODO build and execute insert query using insertStrings
+
+            int insertCount = 0;
+            StringBuilder insertStringBuilder = new StringBuilder();
+            while(insertStrings.Count > 0) {
+                insertStringBuilder.Append($"INSERT INTO {table.GetName()} ({table.GetColumnsString()}) VALUES ");
+                while (insertCount < maxInsertBatch && insertStrings.Count > 0) {
+                    insertStringBuilder.Append(insertStrings[0]);
+                    insertStrings.RemoveAt(0);
+                    insertStringBuilder.Append(", ");
+                    insertCount++;
+                }
+                insertStringBuilder.Remove(insertStringBuilder.Length - 2, 2);
+                ExecuteQuery(insertStringBuilder.ToString());
+                /*DEBUG*/ Console.WriteLine($"Inserted {insertCount} rows into table '{table.GetName()}'");
+                insertStringBuilder.Clear();
+                insertCount = 0;
+            }
         }
 
-        private void CreateTable(SqliteConnection db, SoulsDataTable table) {
+        private void CreateTable(SoulsDataTable table) {
             if (table == null || table.GetColumns().Count == 0)
                 throw new Exception("CreateTable() table cannot be null or have zero columns.");
 
             String dropQuery = $"DROP TABLE IF EXISTS {table.GetName()}";
-            ExecuteQuery(db, dropQuery);
+            ExecuteQuery(dropQuery);
 
             StringBuilder queryBuilder = new StringBuilder();
             queryBuilder.Append($"CREATE TABLE {table.GetName()} ");
@@ -77,7 +97,7 @@ namespace DarkSoulsRipper.Ripper
             }
             queryBuilder.Remove(queryBuilder.Length - 2, 2);
             queryBuilder.Append(")");
-            ExecuteQuery(db, queryBuilder.ToString());
+            ExecuteQuery(queryBuilder.ToString());
         }
     }
 }

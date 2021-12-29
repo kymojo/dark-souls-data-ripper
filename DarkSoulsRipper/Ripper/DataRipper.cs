@@ -36,12 +36,12 @@ namespace DarkSoulsRipper.Ripper
             String textFileNameFull = Path.GetFileNameWithoutExtension(binderFile.Name);
             String textFileNameTrimmed = Regex.Match(textFileNameFull, @"(.+?)(_*)$").Groups[1].Value;
             String textFileNameSuffixed = textFileNameTrimmed + (isJapanese ? "_JAP" : isEnglish ? "_ENG" : "");
-            String textFileNamePrefixed = "DATA_" + textFileNameSuffixed;
+            String textFileNamePrefixed = "TEXT_" + textFileNameSuffixed;
             String tableName = textFileNamePrefixed;
 
             List<SoulsDataTable.Column> columns = new List<SoulsDataTable.Column>();
             columns.Add(new SoulsDataTable.Column("ID", SoulsDataTable.Column.ColumnType.INTEGER));
-            columns.Add(new SoulsDataTable.Column("Value", SoulsDataTable.Column.ColumnType.INTEGER));
+            columns.Add(new SoulsDataTable.Column("Value", SoulsDataTable.Column.ColumnType.TEXT));
             SoulsDataTable table = new SoulsDataTable(tableName, columns);
 
             FMG textFile = FMG.Read(binderFile.Bytes);
@@ -70,11 +70,15 @@ namespace DarkSoulsRipper.Ripper
                     def = paramDef;
             }
             if (def == null)
-                throw new Exception("idkwtfbbq");
+                throw new Exception($"RipParamsFile failed to find PARAMDEF '{paramFile.ParamType}' in paramDefs");
+
+            // If ApplyParamdefCarefully doesn't work for some reason, force with ApplyParamdef
+            if (paramFile.Rows[0].Cells == null)
+                paramFile.ApplyParamdef(def);
 
             List<SoulsDataTable.Column> columns = new List<SoulsDataTable.Column>();
             columns.Add(new SoulsDataTable.Column("ID", SoulsDataTable.Column.ColumnType.INTEGER));
-            columns.Add(new SoulsDataTable.Column("Name", SoulsDataTable.Column.ColumnType.INTEGER));
+            columns.Add(new SoulsDataTable.Column("Name", SoulsDataTable.Column.ColumnType.TEXT));
             foreach (PARAMDEF.Field field in def.Fields) {
                 String fieldName = field.InternalName;
                 PARAMDEF.DefType fieldType = field.DisplayType;
@@ -83,12 +87,16 @@ namespace DarkSoulsRipper.Ripper
 
             SoulsDataTable table = new SoulsDataTable(tableName, columns);
 
+
             foreach (PARAM.Row paramRow in paramFile.Rows) {
                 Dictionary<String, object> row = new Dictionary<String, object>();
                 row.Add("ID", paramRow.ID);
                 row.Add("Name", paramRow.Name);
-                foreach (PARAM.Cell paramCell in paramRow.Cells)
-                    row.Add(paramCell.Def.InternalName, paramCell.Value.ToString());
+                if (paramRow.Cells != null && paramRow.Cells.Count > 0) {
+                    foreach (PARAM.Cell paramCell in paramRow.Cells)
+                        row.Add(paramCell.Def.InternalName, paramCell.Value.ToString());
+                }
+                table.AddRow(row);
             }
 
             return table;
@@ -98,7 +106,7 @@ namespace DarkSoulsRipper.Ripper
             List<BinderFile> textFiles = gameFiles.D1TextFiles();
             foreach (BinderFile binderFile in textFiles) {
                 SoulsDataTable table = RipTextFile(binderFile);
-                // TODO do something with the table
+                database.WriteDataTable(table);
             }
         }
         private void RipDarkSouls1ParamFiles() {
@@ -106,7 +114,7 @@ namespace DarkSoulsRipper.Ripper
             List<BinderFile> paramFiles = gameFiles.D1ParamFiles();
             foreach (BinderFile binderFile in paramFiles) {
                 SoulsDataTable table = RipParamsFile(binderFile, paramDefs);
-                // TODO do something with the table
+                database.WriteDataTable(table);
             }
         }
 

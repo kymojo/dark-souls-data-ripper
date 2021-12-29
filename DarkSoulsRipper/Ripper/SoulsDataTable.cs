@@ -16,6 +16,7 @@ namespace DarkSoulsRipper.Ripper
         public SoulsDataTable(String name, List<Column> columns) {
             this.name = name;
             this.columns = columns;
+            rows = new List<Dictionary<String, object>>();
         }
 
         public String GetName() {
@@ -24,6 +25,13 @@ namespace DarkSoulsRipper.Ripper
 
         public List<Column> GetColumns() {
             return columns;
+        }
+
+        public String GetColumnsString() {
+            List<String> columnNames = new List<String>();
+            foreach (Column column in columns)
+                columnNames.Add(column.GetName());
+            return String.Join(", ", columnNames);
         }
 
         public List<Dictionary<String,object>> GetRows() {
