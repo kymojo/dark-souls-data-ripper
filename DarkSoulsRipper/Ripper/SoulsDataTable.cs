@@ -18,6 +18,13 @@ namespace DarkSoulsRipper.Ripper
             this.columns = columns;
             rows = new List<Dictionary<String, object>>();
         }
+        public static SoulsDataTable TextTable(String name) {
+            List<Column> columns = new List<Column>();
+            columns.Add(new Column("ID", Column.ColumnType.INTEGER));
+            columns.Add(new Column("Value", Column.ColumnType.TEXT));
+            SoulsDataTable table = new SoulsDataTable(name, columns);
+            return table;
+        }
 
         public String GetName() {
             return name;

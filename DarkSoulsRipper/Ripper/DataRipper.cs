@@ -21,13 +21,57 @@ namespace DarkSoulsRipper.Ripper
 
             database.Open();
 
-            RipDarkSouls1TextFiles();
-            RipDarkSouls1ParamFiles();
+            // RipDarkSouls1TextFiles();
+            // RipDarkSouls1ParamFiles();
+            RipDarkSouls2TextFiles();
 
             database.Close();
 
             /*DEBUG*/
             Console.WriteLine("Done!");
+        }
+
+        private void RipDarkSouls1TextFiles() {
+            List<BinderFile> textFiles = gameFiles.D1TextFiles();
+            foreach (BinderFile binderFile in textFiles) {
+                SoulsDataTable table = RipTextFile(binderFile);
+                database.WriteDataTable(table);
+            }
+        }
+        private void RipDarkSouls1ParamFiles() {
+            List<PARAMDEF> paramDefs = gameFiles.D1ParamDefs();
+            List<BinderFile> paramFiles = gameFiles.D1ParamFiles();
+            foreach (BinderFile binderFile in paramFiles) {
+                SoulsDataTable table = RipParamsFile(binderFile, paramDefs);
+                database.WriteDataTable(table);
+            }
+        }
+
+        private void RipDarkSouls2TextFiles() {
+            Dictionary<String, FMG> textFiles = gameFiles.D2TextFiles();
+            foreach(KeyValuePair<String,FMG> file in textFiles) {
+                RipTextFile(file.Key, file.Value);
+            }
+        }
+
+
+        private SoulsDataTable RipTextFile(String tableName, FMG fmgFile) {
+            List<FMG> fmgFiles = new List<FMG>();
+            fmgFiles.Add(fmgFile);
+            return RipTextFileBatch(tableName, fmgFiles);
+        }
+
+        private SoulsDataTable RipTextFileBatch(String tableName, List<FMG> fmgFiles) {
+            SoulsDataTable table = SoulsDataTable.TextTable(tableName);
+            foreach(FMG fmgFile in fmgFiles) {
+                foreach (FMG.Entry entry in fmgFile.Entries) {
+                    Dictionary<String, object> row = new Dictionary<String, object>();
+                    row.Add("ID", entry.ID);
+                    row.Add("Value", entry.Text);
+                    table.AddRow(row);
+                }
+            }
+            return table;
         }
 
         private SoulsDataTable RipTextFile(BinderFile binderFile) {
@@ -39,19 +83,8 @@ namespace DarkSoulsRipper.Ripper
             String textFileNamePrefixed = "TEXT_" + textFileNameSuffixed;
             String tableName = textFileNamePrefixed;
 
-            List<SoulsDataTable.Column> columns = new List<SoulsDataTable.Column>();
-            columns.Add(new SoulsDataTable.Column("ID", SoulsDataTable.Column.ColumnType.INTEGER));
-            columns.Add(new SoulsDataTable.Column("Value", SoulsDataTable.Column.ColumnType.TEXT));
-            SoulsDataTable table = new SoulsDataTable(tableName, columns);
-
             FMG textFile = FMG.Read(binderFile.Bytes);
-            foreach (FMG.Entry entry in textFile.Entries) {
-                Dictionary<String, object> row = new Dictionary<String, object>();
-                row.Add("ID", entry.ID);
-                row.Add("Value", entry.Text);
-                table.AddRow(row);
-            }
-            return table;
+            return RipTextFile(tableName, textFile);
         }
 
         private SoulsDataTable RipParamsFile(BinderFile binderFile, List<PARAMDEF> paramDefs) {
@@ -65,7 +98,7 @@ namespace DarkSoulsRipper.Ripper
             paramFile.ApplyParamdefCarefully(paramDefs);
 
             PARAMDEF def = null;
-            foreach(PARAMDEF paramDef in paramDefs) {
+            foreach (PARAMDEF paramDef in paramDefs) {
                 if (paramDef.ParamType == paramFile.ParamType)
                     def = paramDef;
             }
@@ -100,22 +133,6 @@ namespace DarkSoulsRipper.Ripper
             }
 
             return table;
-        }
-
-        private void RipDarkSouls1TextFiles() {
-            List<BinderFile> textFiles = gameFiles.D1TextFiles();
-            foreach (BinderFile binderFile in textFiles) {
-                SoulsDataTable table = RipTextFile(binderFile);
-                database.WriteDataTable(table);
-            }
-        }
-        private void RipDarkSouls1ParamFiles() {
-            List<PARAMDEF> paramDefs = gameFiles.D1ParamDefs();
-            List<BinderFile> paramFiles = gameFiles.D1ParamFiles();
-            foreach (BinderFile binderFile in paramFiles) {
-                SoulsDataTable table = RipParamsFile(binderFile, paramDefs);
-                database.WriteDataTable(table);
-            }
         }
 
     }
