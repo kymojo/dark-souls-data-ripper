@@ -21,9 +21,10 @@ namespace DarkSoulsRipper.Ripper
 
             database.Open();
 
-            // RipDarkSouls1TextFiles();
-            // RipDarkSouls1ParamFiles();
+            RipDarkSouls1TextFiles();
             RipDarkSouls2TextFiles();
+            RipDarkSouls3TextFiles();
+            // RipDarkSouls1ParamFiles();
 
             database.Close();
 
@@ -32,12 +33,33 @@ namespace DarkSoulsRipper.Ripper
         }
 
         private void RipDarkSouls1TextFiles() {
-            List<BinderFile> textFiles = gameFiles.D1TextFiles();
-            foreach (BinderFile binderFile in textFiles) {
-                SoulsDataTable table = RipTextFile(binderFile);
+
+            BatchedFiles<FMG> textBatches = gameFiles.GetTextBatches(GameType.DS);
+
+            foreach (KeyValuePair<String,List<FMG>> kvp in textBatches.Batches) {
+                SoulsDataTable table = RipTextFileBatch(kvp.Key, kvp.Value);
                 database.WriteDataTable(table);
             }
         }
+
+        private void RipDarkSouls2TextFiles() {
+            BatchedFiles<FMG> textBatches = gameFiles.GetTextBatches(GameType.DS2);
+            foreach (KeyValuePair<String, List<FMG>> kvp in textBatches.Batches) {
+                SoulsDataTable table = RipTextFileBatch(kvp.Key, kvp.Value);
+                database.WriteDataTable(table);
+            }
+        }
+
+        private void RipDarkSouls3TextFiles() {
+
+            BatchedFiles<FMG> textBatches = gameFiles.GetTextBatches(GameType.DS3);
+
+            foreach (KeyValuePair<String, List<FMG>> kvp in textBatches.Batches) {
+                SoulsDataTable table = RipTextFileBatch(kvp.Key, kvp.Value);
+                database.WriteDataTable(table);
+            }
+        }
+
         private void RipDarkSouls1ParamFiles() {
             List<PARAMDEF> paramDefs = gameFiles.D1ParamDefs();
             List<BinderFile> paramFiles = gameFiles.D1ParamFiles();
@@ -47,19 +69,12 @@ namespace DarkSoulsRipper.Ripper
             }
         }
 
-        private void RipDarkSouls2TextFiles() {
-            Dictionary<String, FMG> textFiles = gameFiles.D2TextFiles();
-            foreach(KeyValuePair<String,FMG> file in textFiles) {
-                RipTextFile(file.Key, file.Value);
-            }
-        }
 
-
-        private SoulsDataTable RipTextFile(String tableName, FMG fmgFile) {
-            List<FMG> fmgFiles = new List<FMG>();
-            fmgFiles.Add(fmgFile);
-            return RipTextFileBatch(tableName, fmgFiles);
-        }
+        //private SoulsDataTable RipTextFile(String tableName, FMG fmgFile) {
+        //    List<FMG> fmgFiles = new List<FMG>();
+        //    fmgFiles.Add(fmgFile);
+        //    return RipTextFileBatch(tableName, fmgFiles);
+        //}
 
         private SoulsDataTable RipTextFileBatch(String tableName, List<FMG> fmgFiles) {
             SoulsDataTable table = SoulsDataTable.TextTable(tableName);
@@ -73,7 +88,7 @@ namespace DarkSoulsRipper.Ripper
             }
             return table;
         }
-
+        /*
         private SoulsDataTable RipTextFile(BinderFile binderFile) {
             bool isJapanese = binderFile.Name.Contains("Data_JAPANESE");
             bool isEnglish = binderFile.Name.Contains("Data_ENGLISH");
@@ -86,7 +101,7 @@ namespace DarkSoulsRipper.Ripper
             FMG textFile = FMG.Read(binderFile.Bytes);
             return RipTextFile(tableName, textFile);
         }
-
+        */
         private SoulsDataTable RipParamsFile(BinderFile binderFile, List<PARAMDEF> paramDefs) {
 
             String paramTableNameFull = Path.GetFileNameWithoutExtension(binderFile.Name);

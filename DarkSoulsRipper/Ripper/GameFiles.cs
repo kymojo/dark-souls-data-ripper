@@ -8,6 +8,14 @@ using System.Collections.Generic;
 
 namespace DarkSoulsRipper.Ripper
 {
+    public enum GameType
+    {
+        DS,DS2,DS3
+    };
+
+    /// <summary>
+    /// Game Files "factory"
+    /// </summary>
     class GameFiles
     {
         private String d1DirPath = @"D:/Programs/Steam/steamapps/common/DARK SOULS REMASTERED";
@@ -27,25 +35,103 @@ namespace DarkSoulsRipper.Ripper
         private String d3ItemTextBinderJPath = @"Game/msg/jpnjp";
         private String d3GameParamBinderPath = @"Game/param/drawparam";
 
+        public BatchedFiles<FMG> GetTextBatches(GameType game) {
+            switch(game) {
+                case GameType.DS:
+                    return D1TextBatches();
+                case GameType.DS2:
+                    return D2TextBatches();
+                case GameType.DS3:
+                    return D3TextBatches();
+                default:
+                    return new BatchedFiles<FMG>();
+            }
+        }
+
         /// <summary>
         /// Get all game text BinderFiles for Dark Souls Remastered
         /// </summary>
-        public List<BinderFile> D1TextFiles() {
-            List<BinderFile> textFiles = new List<BinderFile>();
-            List<FileInfo> rawFiles = new List<FileInfo>();
+        public BatchedFiles<FMG> D1TextBatches() {
+            UnbatchedFiles<FileInfo> binderFiles = new UnbatchedFiles<FileInfo>();
 
             String englishFilesPath = Path.Combine(d1DirPath, d1TextDirectoryEnglishPath);
             String japaneseFilesPath = Path.Combine(d1DirPath, d1TextDirectoryJapanesePath);
-            rawFiles.AddRange(FindFiles(englishFilesPath, @".*\.msgbnd\.dcx$"));
-            rawFiles.AddRange(FindFiles(japaneseFilesPath, @".*\.msgbnd\.dcx$"));
+            binderFiles.Add(FindFiles(englishFilesPath, "ENG", @".*\.msgbnd\.dcx$"));
+            binderFiles.Add(FindFiles(japaneseFilesPath, "JAP", @".*\.msgbnd\.dcx$"));
 
-            foreach (FileInfo file in rawFiles) {
+            UnbatchedFiles<FMG> fmgFiles = new UnbatchedFiles<FMG>();
+            foreach (KeyValuePair<String,FileInfo> kvp in binderFiles.Files) {
+                FileInfo file = kvp.Value;
+                String batchName = kvp.Key;
                 BND3 binder = BND3.Read(file.FullName);
-                textFiles.AddRange(binder.Files);
+                foreach(BinderFile bFile in binder.Files) {
+                    FMG fmg = FMG.Read(bFile.Bytes);
+                    String tableName = "TEXT_DS1_" + MakeBatchTableName(batchName, bFile.Name);
+                    fmgFiles.Add(tableName, fmg);
+                }
+            }
+            return fmgFiles.AsBatchedFiles();
+        }
+
+        public BatchedFiles<FMG> D2TextBatches() {
+            UnbatchedFiles<FileInfo> rawFmgFiles = new UnbatchedFiles<FileInfo>();
+
+            String englishFilesPath = Path.Combine(d2DirPath, d2MenuTextEPath);
+            String japaneseFilesPath = Path.Combine(d2JPDirPath, d2MenuTextJPath);
+            rawFmgFiles.Add(FindFiles(englishFilesPath, "ENG", @".*\.fmg$", null, true));
+            rawFmgFiles.Add(FindFiles(japaneseFilesPath, "JAP", @".*\.fmg$", null, true));
+
+            UnbatchedFiles<FMG> fmgFiles = new UnbatchedFiles<FMG>();
+            foreach (KeyValuePair<String, FileInfo> kvp in rawFmgFiles.Files) {
+                FileInfo file = kvp.Value;
+                String batchName = kvp.Key;
+                FMG fmg = FMG.Read(file.FullName);
+                String tableName = "TEXT_DS2_" + MakeBatchTableName(batchName, null);
+                fmgFiles.Add(tableName, fmg);
             }
 
-            return textFiles;
+            BatchedFiles<FMG> batchedFmgFiles = fmgFiles.AsBatchedFiles();
+            batchedFmgFiles.Batch(@"(.*)_m[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}(.*)", "$1$2");
+
+            return batchedFmgFiles;
         }
+
+        public BatchedFiles<FMG> D3TextBatches() {
+            UnbatchedFiles<FileInfo> binderFiles = new UnbatchedFiles<FileInfo>();
+
+            String englishFilesPath = Path.Combine(d3DirPath, d3ItemTextBinderEPath);
+            String japaneseFilesPath = Path.Combine(d3DirPath, d3ItemTextBinderJPath);
+            binderFiles.Add(FindFiles(englishFilesPath, "ENG", @".*\.msgbnd\.dcx$"));
+            binderFiles.Add(FindFiles(japaneseFilesPath, "JAP", @".*\.msgbnd\.dcx$"));
+
+            UnbatchedFiles<FMG> fmgFiles = new UnbatchedFiles<FMG>();
+            foreach (KeyValuePair<String, FileInfo> kvp in binderFiles.Files) {
+                FileInfo file = kvp.Value;
+                String batchName = kvp.Key;
+                BND4 binder = BND4.Read(file.FullName);
+                foreach (BinderFile bFile in binder.Files) {
+                    FMG fmg = FMG.Read(bFile.Bytes);
+                    String tableName = "TEXT_DS3_" + MakeBatchTableName(batchName, bFile.Name);
+                    fmgFiles.Add(tableName, fmg);
+                }
+            }
+
+            BatchedFiles<FMG> batchedFmgFiles = fmgFiles.AsBatchedFiles();
+
+            String[] ds3FileTranslations = File.ReadAllLines("../../../ds3_file_translations.csv");
+            Dictionary<String, String> translationTable = new Dictionary<String, String>();
+            foreach(String translationLine in ds3FileTranslations) {
+                Match lineMatch = Regex.Match(translationLine, @"(.+)\t(.+)");
+                String japanese = lineMatch.Groups[1].Value;
+                String english = lineMatch.Groups[2].Value;
+                batchedFmgFiles.RegexReplaceNames(japanese, japanese, english);
+            }
+
+            batchedFmgFiles.Batch(@"^(.+?)(dlc[12]_)(.+?)((dlc[12]_)(.+?))?$", "$1$3$6");
+
+            return batchedFmgFiles;
+        }
+
         /// <summary>
         /// Get all game paramDefs for Dark Souls Remastered
         /// </summary>
@@ -70,48 +156,98 @@ namespace DarkSoulsRipper.Ripper
             return binder.Files;
         }
 
-        public Dictionary<String, FMG> D2TextFiles() {
-            Dictionary<String, FMG> textFiles = new Dictionary<String, FMG> ();
-            List<FileInfo> rawFiles = new List<FileInfo>();
+        // ############################################
 
-            String englishFilesPath = Path.Combine(d2DirPath, d2MenuTextEPath);
-            String japaneseFilesPath = Path.Combine(d2JPDirPath, d2MenuTextJPath);
-            rawFiles.AddRange(FindFiles(englishFilesPath, @".*\.fmg$", @"^m[0-9]{2}"));
-            rawFiles.AddRange(FindFiles(japaneseFilesPath, @".*\.fmg$", @"^m[0-9]{2}"));
+        //private String SubDirPathToFileName(String subDirPath) {
+        //    subDirPath = subDirPath.Replace(" ", "");
+        //    subDirPath = subDirPath.Replace("/", "_");
+        //    subDirPath = subDirPath.Replace(@"\", "_");
+        //    return subDirPath;
+        //}
 
-            foreach (FileInfo file in rawFiles) {
-                FMG textFile = FMG.Read(file.FullName);
+        //private Dictionary<String,List<FileInfo>> ConvertTextDictionaryToBatches(Dictionary<String,FileInfo> asdf) {
+        //    Dictionary<String, List<FileInfo>> batches = new Dictionary<String, List<FileInfo>>();
+        //    foreach (KeyValuePair<String, FileInfo> kvp in asdf) {
+        //        List<FileInfo> batchList = new List<FileInfo>();
+        //        batchList.Add(kvp.Value);
+        //        batches.Add(kvp.Key, batchList);
+        //    }
+        //    return batches;
+        //}
 
-                bool isJapanese = file.FullName.Contains("japanese");
-                bool isEnglish = file.FullName.Contains("english");
-                String textFileNameFull = Path.GetFileNameWithoutExtension(file.FullName);
-                String textFileNameTrimmed = Regex.Match(textFileNameFull, @"(.+?)(_*)$").Groups[1].Value;
-                String textFileNameSuffixed = textFileNameTrimmed + (isJapanese ? "_JAP" : isEnglish ? "_ENG" : "");
-                String textFileNamePrefixed = "TEXT_" + textFileNameSuffixed;
-                String tableName = textFileNamePrefixed;
+        //private void CombineDictionary<K,V>(ref Dictionary<K,V> dictionary, Dictionary<K,V> addDictionary) {
+        //    foreach (KeyValuePair<K, V> kvp in addDictionary)
+        //        dictionary.Add(kvp.Key, kvp.Value);
+        //}
 
-                textFiles.Add(tableName, textFile);
-            }
-            return textFiles;
-        }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="subPath"></param>
+        /// <param name="regexPattern"></param>
+        /// <param name="regexIgnorePattern"></param>
+        /// <param name="recursive"></param>
+        /// <returns>Dictionary keyed off subpath+filename with corresponding FileInfo values</returns>
+        private UnbatchedFiles<FileInfo> FindFiles(String path, String subPath, String regexPattern, String regexIgnorePattern = null, bool recursive = false) {
+            UnbatchedFiles<FileInfo> files = new UnbatchedFiles<FileInfo>(); 
+            
+            if (subPath == null)
+                subPath = "";
 
-        private List<FileInfo> FindFiles(String path, String regexPattern, String regexIgnorePattern = null, bool recursive = false) {
-            List<FileInfo> foundFiles = new List<FileInfo>();
+            Dictionary<String, FileInfo> foundFiles = new Dictionary<String, FileInfo>();
             DirectoryInfo directory = new DirectoryInfo(path);
-            FileInfo[] files = directory.GetFiles();
-            foreach (FileInfo file in files) {
+            FileInfo[] directoryFiles = directory.GetFiles();
+            foreach (FileInfo file in directoryFiles) {
                 if (regexPattern == null || Regex.IsMatch(file.Name, regexPattern))
-                    if (regexIgnorePattern == null || !Regex.IsMatch(file.Name, regexIgnorePattern))
-                        foundFiles.Add(file);
+                    if (regexIgnorePattern == null || !Regex.IsMatch(file.Name, regexIgnorePattern)) {
+                        String fileName = Path.Combine(subPath, file.Name);
+                        foundFiles.Add(fileName,file);
+                    }
             }
+            if (foundFiles.Count > 0)
+                files = new UnbatchedFiles<FileInfo>(foundFiles);
+
             if (recursive) {
-                DirectoryInfo[] directories = directory.GetDirectories();
-                foreach(DirectoryInfo dir in directories) {
-                    List<FileInfo> subdirFiles = FindFiles(dir.FullName, regexPattern, regexIgnorePattern, recursive);
-                    foundFiles.AddRange(subdirFiles);
+                DirectoryInfo[] subdirectories = directory.GetDirectories();
+                foreach (DirectoryInfo dir in subdirectories) {
+                    String dirSubPath = Path.Combine(subPath, dir.Name);
+
+                    UnbatchedFiles<FileInfo> subfolderFiles = FindFiles(dir.FullName, dirSubPath, regexPattern, regexIgnorePattern, recursive);
+                    if (files.IsEmpty())
+                        files = subfolderFiles;
+                    else
+                        files.Add(subfolderFiles);
                 }
             }
-            return foundFiles;
+
+            return files;
+        }
+
+        private String MakeBatchTableName(String batchName, String filePath) {
+            bool hasBatchName = (batchName != null && batchName.Length > 0);
+            bool hasFilePath = (filePath != null && filePath.Length > 0);
+            String batchNameBaseDirs = (hasBatchName ? Path.GetDirectoryName(batchName) : "");
+            String batchNameFileNoExt = (hasBatchName ? Regex.Match(Path.GetFileName(batchName), @"^[^.]+").Value : "");
+            String filePathNameNoExt = (hasFilePath ? Regex.Match(Path.GetFileName(filePath), @"^[^.]+").Value : "");
+
+            String newBatchName = "";
+            if (batchNameBaseDirs.Length > 0)
+                newBatchName += batchNameBaseDirs + "_";
+            if (batchNameFileNoExt.Length > 0)
+                newBatchName += batchNameFileNoExt + "_";
+            if (filePathNameNoExt.Length > 0)
+                newBatchName += filePathNameNoExt;
+
+            newBatchName = Regex.Replace(newBatchName, @"(\\|\/)", "_");
+            newBatchName = Regex.Replace(newBatchName, @"( |\.|_$)", "");
+
+            if (Regex.IsMatch(newBatchName, @"^(ENG|JAP)_"))
+                newBatchName = Regex.Replace(newBatchName, @"^(ENG|JAP)_(.*)", @"$2_$1");
+
+            newBatchName = Regex.Replace(newBatchName, @"_{2,}", "_");
+
+            return newBatchName;
         }
     }
 }
