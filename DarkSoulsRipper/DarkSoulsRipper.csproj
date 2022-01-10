@@ -10,7 +10,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include=".old\CsvRipper\CsvCrawler.cs" />
+    <Compile Include=".old\Ripper\BatchedFiles.cs" />
+    <Compile Include=".old\Ripper\DataRipper.cs" />
+    <Compile Include=".old\Ripper\GameFiles.cs" />
+    <Compile Include=".old\Ripper\SoulsDatabase.cs" />
+    <Compile Include=".old\Ripper\SoulsDataTable.cs" />
+    <Compile Include=".old\Ripper\UnbatchedFiles.cs" />
     <Compile Include="Program.old" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include=".old\CsvRipper\JsonExample.json" />
   </ItemGroup>
 
   <ItemGroup>
